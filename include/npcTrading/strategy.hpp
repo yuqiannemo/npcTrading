@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <atomic>
 #include <functional>
+#include <map>
 
 namespace npcTrading {
 
@@ -187,8 +188,7 @@ struct StrategyConfig {
     StrategyId strategy_id;
     OmsType oms_type = OmsType::NETTING;
     bool manage_positions = true;
-    
-    // Add strategy-specific configuration here
+    std::map<std::string, std::string> parameters;
 };
 
 // ============================================================================

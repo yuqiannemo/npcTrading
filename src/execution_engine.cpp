@@ -216,15 +216,45 @@ void ExecutionEngine::handle_process(const std::shared_ptr<Message>& msg) {
 }
 
 void ExecutionEngine::handle_fill(const OrderFilled& event) {
-    // TODO: Update position
+    Order* order = event.order();
+    if (!order) return;
+
+    PositionId pos_id = generate_position_id(order);
+    const Fill& fill = event.fill();
+
+    if (cache_->position_exists(pos_id)) {
+        // Update existing position
+        const Position* existing_pos = cache_->position(pos_id);
+        Position pos = *existing_pos; // Copy
+        pos.apply_fill(fill);
+        cache_->update_position(pos);
+        
+        // Link order to position
+        order->set_position_id(pos_id);
+        
+        log_info("Position updated: " + pos_id + 
+                 " Qty=" + std::to_string(pos.quantity().as_double()) + 
+                 " AvgPrice=" + std::to_string(pos.entry_price().as_double()));
+    } else {
+        // Create new position
+        Position pos(pos_id, order->instrument_id(), order->strategy_id());
+        pos.apply_fill(fill);
+        cache_->add_position(pos);
+        
+        // Link order to position
+        order->set_position_id(pos_id);
+        
+        log_info("Position created: " + pos_id + 
+                 " Qty=" + std::to_string(pos.quantity().as_double()) + 
+                 " AvgPrice=" + std::to_string(pos.entry_price().as_double()));
+    }
 }
 
 void ExecutionEngine::update_position(Order* order, const Fill& fill) {
-    // TODO: Implement position update
+    // Deprecated/Unused helper, logic moved to handle_fill
 }
 
 PositionId ExecutionEngine::generate_position_id(Order* order) {
-    // TODO: Generate position ID based on OMS type
     return order->instrument_id() + "-" + order->strategy_id();
 }
 

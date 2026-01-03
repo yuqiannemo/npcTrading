@@ -159,6 +159,9 @@ public:
         if (running_) return;
         running_ = true;
         
+        std::string secret_mask = config_.api_key.substr(0, 4) + "****" + config_.api_key.substr(config_.api_key.length() > 4 ? config_.api_key.length() - 4 : 0);
+        std::cout << "[DEBUG] Connecting with Key: " << secret_mask << std::endl;
+
         // Create listen key for user data stream
         listen_key_ = create_listen_key();
         if (listen_key_.empty()) {
@@ -221,13 +224,16 @@ public:
         
         // Build request parameters
         std::ostringstream params;
+        // Fix: Subtract 2000ms to avoid 'Timestamp ahead of server' error
+        auto ts = timestamp_to_ms(clock_->now() - std::chrono::milliseconds(2000));
+        
         params << "symbol=" << order->instrument_id()
                << "&side=" << side_to_binance(order->side())
                << "&type=" << type_to_binance(order->type())
                << "&quantity=" << std::fixed << std::setprecision(8) << order->quantity().as_double()
                << "&newClientOrderId=" << url_encode(order->order_id())
                << "&recvWindow=" << config_.recv_window_ms
-               << "&timestamp=" << timestamp_to_ms(clock_->now());
+               << "&timestamp=" << ts;
         
         // Add price and timeInForce for LIMIT orders
         if (order->type() == OrderType::LIMIT) {
@@ -261,10 +267,13 @@ public:
         if (!order) return;
         
         std::ostringstream params;
+        // Fix: Subtract 2000ms to avoid 'Timestamp ahead of server' error
+        auto ts = timestamp_to_ms(clock_->now() - std::chrono::milliseconds(2000));
+
         params << "symbol=" << order->instrument_id()
                << "&origClientOrderId=" << url_encode(order->order_id())
                << "&recvWindow=" << config_.recv_window_ms
-               << "&timestamp=" << timestamp_to_ms(clock_->now());
+               << "&timestamp=" << ts;
         
         std::string query = params.str();
         std::string signature = hmac_sha256(config_.api_secret, query);
@@ -416,10 +425,14 @@ private:
             beast::error_code ec;
             stream.shutdown(ec);
             
+            std::cout << "[DEBUG] create_listen_key response: " << res.body() << std::endl;
+
             auto jv = json::parse(res.body());
             auto& obj = jv.as_object();
             if (obj.contains("listenKey")) {
                 return std::string(obj["listenKey"].as_string());
+            } else {
+                std::cerr << "[DEBUG] Response missing listenKey. Content: " << res.body() << std::endl;
             }
         } catch (const std::exception& e) {
             std::cerr << "[BinanceExecutionClient] create_listen_key error: " << e.what() << std::endl;

@@ -11,6 +11,9 @@ set(sources
     src/risk_engine.cpp
     src/strategy.cpp
     src/model.cpp
+    src/logger.cpp
+    src/config.cpp
+    src/strategies/momentum_reversal.cpp
 )
 
 # Conditionally add Binance client sources when enabled
@@ -39,6 +42,9 @@ set(headers
     include/npcTrading/risk_engine.hpp
     include/npcTrading/strategy.hpp
     include/npcTrading/model.hpp
+    include/npcTrading/logger.hpp
+    include/npcTrading/config.hpp
+    include/npcTrading/strategies/momentum_reversal.hpp
 )
 
 # Binance headers are always available (Pimpl pattern keeps Boost out of public API)

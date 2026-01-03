@@ -1,5 +1,6 @@
 #include "npcTrading/strategy.hpp"
 #include "npcTrading/data_engine.hpp"
+#include "npcTrading/logger.hpp"
 #include <stdexcept>
 #include <utility>
 
@@ -13,7 +14,7 @@ Actor::Actor(const std::string& actor_id, MessageBus* msgbus, Cache* cache, Cloc
 void Actor::subscribe_bars(const BarType& bar_type) {
     BarKey key{bar_type.instrument_id(), bar_type.spec()};
     if (key.instrument_id.empty() || key.spec.empty()) {
-        log_warning("subscribe_bars called with empty bar fields");
+        LOG_WARN("Actor", "subscribe_bars called with empty bar fields");
         return;
     }
     if (!bar_subscriptions_.insert(key).second) {
@@ -52,7 +53,7 @@ void Actor::unsubscribe_bars(const BarType& bar_type) {
 
 void Actor::subscribe_quotes(const InstrumentId& instrument_id) {
     if (instrument_id.empty()) {
-        log_warning("subscribe_quotes called with empty instrument_id");
+        LOG_WARN("Actor", "subscribe_quotes called with empty instrument_id");
         return;
     }
     if (!quote_subscriptions_.insert(instrument_id).second) {
@@ -89,7 +90,7 @@ void Actor::unsubscribe_quotes(const InstrumentId& instrument_id) {
 
 void Actor::subscribe_trades(const InstrumentId& instrument_id) {
     if (instrument_id.empty()) {
-        log_warning("subscribe_trades called with empty instrument_id");
+        LOG_WARN("Actor", "subscribe_trades called with empty instrument_id");
         return;
     }
     if (!trade_subscriptions_.insert(instrument_id).second) {
@@ -130,7 +131,7 @@ void Actor::subscribe_order_book(const InstrumentId& instrument_id, int depth) {
         return;
     }
     if (depth <= 0) {
-        log_warning("subscribe_order_book called with non-positive depth");
+        LOG_WARN("Actor", "subscribe_order_book called with non-positive depth");
         return;
     }
     if (!orderbook_subscriptions_.insert(instrument_id).second) {
@@ -176,7 +177,7 @@ void Actor::register_event_handler(const std::string& endpoint) {
 
 void Actor::handle_message(const std::shared_ptr<Message>& msg) {
     if (!msg) {
-        log_warning("Received null message in Actor");
+        LOG_WARN("Actor", "Received null message in Actor");
         return;
     }
 
@@ -215,7 +216,7 @@ Strategy::Strategy(const StrategyConfig& config, MessageBus* msgbus, Cache* cach
 
 void Strategy::submit_order(const std::shared_ptr<Order>& order) {
     if (!order) {
-        log_warning("submit_order called with null order");
+        LOG_WARN("Strategy", "submit_order called with null order");
         return;
     }
     orders_[order->order_id()] = order;
@@ -233,11 +234,11 @@ void Strategy::submit_market_order(const InstrumentId& instrument_id,
                                   OrderSide side,
                                   Quantity quantity) {
     if (instrument_id.empty()) {
-        log_warning("submit_market_order called with empty instrument_id");
+        LOG_WARN("Strategy", "submit_market_order called with empty instrument_id");
         return;
     }
     if (quantity.as_double() <= 0) {
-        log_warning("submit_market_order called with non-positive quantity");
+        LOG_WARN("Strategy", "submit_market_order called with non-positive quantity");
         return;
     }
 
@@ -266,15 +267,15 @@ void Strategy::submit_limit_order(const InstrumentId& instrument_id,
                                  Quantity quantity,
                                  Price price) {
     if (instrument_id.empty()) {
-        log_warning("submit_limit_order called with empty instrument_id");
+        LOG_WARN("Strategy", "submit_limit_order called with empty instrument_id");
         return;
     }
     if (quantity.as_double() <= 0) {
-        log_warning("submit_limit_order called with non-positive quantity");
+        LOG_WARN("Strategy", "submit_limit_order called with non-positive quantity");
         return;
     }
     if (price.as_double() <= 0) {
-        log_warning("submit_limit_order called with non-positive price");
+        LOG_WARN("Strategy", "submit_limit_order called with non-positive price");
         return;
     }
 
@@ -300,7 +301,7 @@ void Strategy::submit_limit_order(const InstrumentId& instrument_id,
 
 void Strategy::modify_order(const std::shared_ptr<Order>& order, Quantity new_quantity, Price new_price) {
     if (!order) {
-        log_warning("modify_order called with null order");
+        LOG_WARN("Strategy", "modify_order called with null order");
         return;
     }
     auto command = std::make_shared<ModifyOrder>(order, new_quantity, new_price);
@@ -309,7 +310,7 @@ void Strategy::modify_order(const std::shared_ptr<Order>& order, Quantity new_qu
 
 void Strategy::cancel_order(const std::shared_ptr<Order>& order) {
     if (!order) {
-        log_warning("cancel_order called with null order");
+        LOG_WARN("Strategy", "cancel_order called with null order");
         return;
     }
     auto command = std::make_shared<CancelOrder>(order);
@@ -340,7 +341,7 @@ bool Strategy::has_position(const InstrumentId& instrument_id) const {
 void Strategy::on_event(const std::shared_ptr<Message>& event) {
     // Dispatch to specific callbacks based on event type
     if (!event) {
-        log_warning("Strategy received null event");
+        LOG_WARN("Strategy", "Strategy received null event");
         return;
     }
 
