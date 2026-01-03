@@ -68,3 +68,8 @@ std::string to_string(TradingState state) {
 }
 
 } // namespace npcTrading
+
+// Implement Boost.JSON header-only here to ensure it's linked for all clients
+#ifdef NPCTRADING_BINANCE_ENABLED
+#include <boost/json/src.hpp>
+#endif

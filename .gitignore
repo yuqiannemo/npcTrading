@@ -372,3 +372,19 @@ MigrationBackup/
 
 # Temporal folder for testing
 tmp/
+
+# Local Environment Config
+.env
+config.json
+
+# Logs
+*.log
+
+# Scripts
+*.ps1
+run_test*
+
+# Build artifacts
+build/
+bin/
+lib/

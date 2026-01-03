@@ -1,5 +1,6 @@
 #include "npcTrading/binance/binance_data_client.hpp"
-#include "npcTrading/clock.hpp"
+#include "npcTrading/logger.hpp" // Added Logger
+#include "npcTrading/common.hpp"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -425,7 +426,7 @@ private:
                 run_ws_connection(streams);
                 
             } catch (const std::exception& e) {
-                std::cerr << "[BinanceDataClient] WS error: " << e.what() << std::endl;
+                LOG_ERROR("BinanceDataClient", "WS error: " + std::string(e.what()));
                 if (running_) {
                     std::this_thread::sleep_for(
                         std::chrono::milliseconds(config_.reconnect_delay_ms));
@@ -673,13 +674,17 @@ private:
         // If not initialized, buffer updates until snapshot arrives
         if (!book.initialized) {
             // For simplicity, just skip until initialized
+            LOG_DEBUG("BinanceDataClient", "Book not initialized, skipping WS update U=" + std::to_string(first_update_id) + " u=" + std::to_string(final_update_id));
             return;
         }
         
         // Drop if this update is too old
         if (final_update_id <= book.last_update_id) {
+            LOG_DEBUG("BinanceDataClient", "Stale update (u=" + std::to_string(final_update_id) + " <= last=" + std::to_string(book.last_update_id) + "), skipping.");
             return;
         }
+
+        LOG_DEBUG("BinanceDataClient", "Processing depth update U=" + std::to_string(first_update_id) + " u=" + std::to_string(final_update_id));
         
         // Apply bid updates
         for (auto& bid : data.at("b").as_array()) {
@@ -767,8 +772,7 @@ private:
                 msgbus_->send(Endpoints::DATA_ENGINE_PROCESS, msg);
                 
             } catch (const std::exception& e) {
-                std::cerr << "[BinanceDataClient] Error fetching book snapshot: " 
-                          << e.what() << std::endl;
+                LOG_ERROR("BinanceDataClient", "Error fetching book snapshot: " + std::string(e.what()));
             }
         }).detach();
     }

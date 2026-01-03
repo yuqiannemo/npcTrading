@@ -227,6 +227,16 @@ if(${PROJECT_NAME}_ENABLE_BINANCE)
       OpenSSL::SSL
       OpenSSL::Crypto
   )
+
+  if(WIN32)
+    target_link_libraries(
+      ${PROJECT_NAME}
+      PUBLIC
+        ws2_32
+        wsock32
+    )
+  endif()
+
   target_compile_definitions(${PROJECT_NAME} PUBLIC NPCTRADING_BINANCE_ENABLED=1)
   
   if(${PROJECT_NAME}_BUILD_EXECUTABLE AND ${PROJECT_NAME}_ENABLE_UNIT_TESTING)
@@ -239,6 +249,16 @@ if(${PROJECT_NAME}_ENABLE_BINANCE)
         OpenSSL::SSL
         OpenSSL::Crypto
     )
+    
+    if(WIN32)
+      target_link_libraries(
+        ${PROJECT_NAME}_LIB
+        PUBLIC
+          ws2_32
+          wsock32
+      )
+    endif()
+
     target_compile_definitions(${PROJECT_NAME}_LIB PUBLIC NPCTRADING_BINANCE_ENABLED=1)
   endif()
   
@@ -457,5 +477,37 @@ if(${PROJECT_NAME}_ENABLE_BINANCE)
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}"
   )
   
-  message(STATUS "Added Binance place order CLI tool")
+  add_executable(${PROJECT_NAME}_binance_data_stream
+    examples/binance_data_stream.cpp
+  )
+  
+  target_link_libraries(${PROJECT_NAME}_binance_data_stream
+    PRIVATE
+      ${PROJECT_NAME}
+      Boost::json
+  )
+
+  # Strategy Runner
+  add_executable(${PROJECT_NAME}_run_strategy
+    examples/run_strategy.cpp
+  )
+  
+  target_link_libraries(${PROJECT_NAME}_run_strategy
+    PRIVATE
+    ${PROJECT_NAME}
+    Boost::json
+    OpenSSL::SSL
+    OpenSSL::Crypto
+  )
+  target_include_directories(${PROJECT_NAME}_binance_data_stream
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  
+  set_target_properties(${PROJECT_NAME}_binance_data_stream
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}"
+  )
+
+  message(STATUS "Added Binance data stream CLI tool")
 endif()

@@ -1,0 +1,29 @@
+{
+    "system": {
+        "log_level": "INFO", 
+        "bypass_risk": false
+    },
+    "exchange": {
+        "binance": {
+            "api_key": "YOUR_API_KEY_HERE",
+            "api_secret": "YOUR_API_SECRET_HERE",
+            "use_testnet": false,
+            "rest_base_url": "https://api.binance.com",
+            "ws_base_url": "stream.binance.com"
+        }
+    },
+    "risk": {
+        "max_position_size": 1.0,
+        "max_order_size": 0.5,
+        "max_drawdown": 0.05
+    },
+    "strategies": {
+        "MomentumReversal": {
+            "symbol": "BTCUSDT",
+            "threshold": "0.000001",
+            "window_size": "200",
+            "quantity": "0.0001",
+            "client_id": "BinanceExec"
+        }
+    }
+}

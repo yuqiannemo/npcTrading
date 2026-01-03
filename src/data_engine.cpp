@@ -1,4 +1,6 @@
 #include "npcTrading/data_engine.hpp"
+#include "npcTrading/logger.hpp"
+#include <iostream>
 
 namespace npcTrading {
 
@@ -37,22 +39,28 @@ void DataEngine::on_initialize() {
 }
 
 void DataEngine::on_start() {
-    // Connect all registered data clients
-    for (auto& [client_id, client] : clients_) {
-        if (client && !client->is_connected()) {
-            log_info("Connecting data client: " + client_id);
-            client->connect();
-        }
+    // State is managed by base Component usually, but if overridden here:
+    // transmission_to is better if manual control needed. 
+    // However, Component::start() usually calls transition_to(RUNNING)
+    // If we want to force it or ensure it matches legacy code:
+    // transition_to(ComponentState::RUNNING); 
+    // Actually, looking at the pattern, Component base likely handles it.
+    // But to fix the compile error directly:
+    transition_to(ComponentState::RUNNING);
+    LOG_INFO("DataEngine", "Connecting " + std::to_string(clients_.size()) + " data clients");
+    
+    for (auto& pair : clients_) {
+        LOG_INFO("DataEngine", "Connecting data client: " + pair.first);
+        pair.second->connect();
     }
 }
 
 void DataEngine::on_stop() {
-    // Disconnect all registered data clients
-    for (auto& [client_id, client] : clients_) {
-        if (client && client->is_connected()) {
-            log_info("Disconnecting data client: " + client_id);
-            client->disconnect();
-        }
+    transition_to(ComponentState::STOPPED);
+    
+    for (auto& pair : clients_) {
+        LOG_INFO("DataEngine", "Disconnecting data client: " + pair.first);
+        pair.second->disconnect();
     }
 }
 
@@ -60,7 +68,7 @@ void DataEngine::register_client(std::shared_ptr<DataClient> client) {
     // Set first registered client as default
     if (default_client_id_.empty()) {
         default_client_id_ = client->client_id();
-        log_info("Default data client set to: " + default_client_id_);
+        LOG_INFO("DataEngine", "Default data client set to: " + default_client_id_);
     }
     clients_[client->client_id()] = client;
     venue_to_client_[client->venue()] = client->client_id();
@@ -102,7 +110,7 @@ DataClient* DataEngine::get_client_for_venue(const VenueId& venue) const {
 }
 
 void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
-    log_debug("Received execute command: " + msg->type());
+    LOG_DEBUG("DataEngine", "Received execute command: " + msg->type());
     
     // ========================================================================
     // Quote subscriptions
@@ -112,7 +120,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         ClientId chosen = select_client(instrument_id, sub->client_id());
         
         if (chosen.empty()) {
-            log_warning("SubscribeQuotes: No client available for " + instrument_id);
+            LOG_WARN("DataEngine", "SubscribeQuotes: No client available for " + instrument_id);
             return;
         }
         
@@ -124,13 +132,13 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             quote_client_[instrument_id] = chosen;
             if (auto* client = get_client(chosen)) {
                 client->subscribe_quotes(instrument_id);
-                log_debug("Subscribed quotes for " + instrument_id + " via " + chosen);
+                LOG_DEBUG("DataEngine", "Subscribed quotes for " + instrument_id + " via " + chosen);
             }
         } else {
             // Already subscribed; warn if different client requested
             const auto& pinned = quote_client_[instrument_id];
             if (!sub->client_id().empty() && sub->client_id() != pinned) {
-                log_warning("SubscribeQuotes: " + instrument_id + 
+                LOG_WARN("DataEngine", "SubscribeQuotes: " + instrument_id + 
                            " already subscribed via " + pinned + 
                            ", ignoring requested client " + sub->client_id());
             }
@@ -142,7 +150,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         const auto& instrument_id = unsub->instrument_id();
         auto it = quote_refcount_.find(instrument_id);
         if (it == quote_refcount_.end() || it->second <= 0) {
-            log_warning("UnsubscribeQuotes: No active subscription for " + instrument_id);
+            LOG_WARN("DataEngine", "UnsubscribeQuotes: No active subscription for " + instrument_id);
             return;
         }
         
@@ -153,7 +161,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             if (client_it != quote_client_.end()) {
                 if (auto* client = get_client(client_it->second)) {
                     client->unsubscribe_quotes(instrument_id);
-                    log_debug("Unsubscribed quotes for " + instrument_id);
+                    LOG_DEBUG("DataEngine", "Unsubscribed quotes for " + instrument_id);
                 }
                 quote_client_.erase(client_it);
             }
@@ -170,7 +178,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         ClientId chosen = select_client(instrument_id, sub->client_id());
         
         if (chosen.empty()) {
-            log_warning("SubscribeTrades: No client available for " + instrument_id);
+            LOG_WARN("DataEngine", "SubscribeTrades: No client available for " + instrument_id);
             return;
         }
         
@@ -181,12 +189,12 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             trade_client_[instrument_id] = chosen;
             if (auto* client = get_client(chosen)) {
                 client->subscribe_trades(instrument_id);
-                log_debug("Subscribed trades for " + instrument_id + " via " + chosen);
+                LOG_DEBUG("DataEngine", "Subscribed trades for " + instrument_id + " via " + chosen);
             }
         } else {
             const auto& pinned = trade_client_[instrument_id];
             if (!sub->client_id().empty() && sub->client_id() != pinned) {
-                log_warning("SubscribeTrades: " + instrument_id + 
+                LOG_WARN("DataEngine", "SubscribeTrades: " + instrument_id + 
                            " already subscribed via " + pinned + 
                            ", ignoring requested client " + sub->client_id());
             }
@@ -198,7 +206,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         const auto& instrument_id = unsub->instrument_id();
         auto it = trade_refcount_.find(instrument_id);
         if (it == trade_refcount_.end() || it->second <= 0) {
-            log_warning("UnsubscribeTrades: No active subscription for " + instrument_id);
+            LOG_WARN("DataEngine", "UnsubscribeTrades: No active subscription for " + instrument_id);
             return;
         }
         
@@ -208,7 +216,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             if (client_it != trade_client_.end()) {
                 if (auto* client = get_client(client_it->second)) {
                     client->unsubscribe_trades(instrument_id);
-                    log_debug("Unsubscribed trades for " + instrument_id);
+                    LOG_DEBUG("DataEngine", "Unsubscribed trades for " + instrument_id);
                 }
                 trade_client_.erase(client_it);
             }
@@ -226,7 +234,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         ClientId chosen = select_client(instrument_id, sub->client_id());
         
         if (chosen.empty()) {
-            log_warning("SubscribeOrderBook: No client available for " + instrument_id);
+            LOG_WARN("DataEngine", "SubscribeOrderBook: No client available for " + instrument_id);
             return;
         }
         
@@ -252,7 +260,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             active_depth = new_max_depth;
             if (auto* client = get_client(chosen)) {
                 client->subscribe_order_book(instrument_id, active_depth);
-                log_debug("Subscribed order book for " + instrument_id + 
+                LOG_DEBUG("DataEngine", "Subscribed order book for " + instrument_id + 
                          " depth=" + std::to_string(active_depth) + " via " + chosen);
             }
         } else {
@@ -266,7 +274,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
                         // Resubscribe with new depth
                         client->unsubscribe_order_book(instrument_id);
                         client->subscribe_order_book(instrument_id, active_depth);
-                        log_debug("Resubscribed order book for " + instrument_id + 
+                        LOG_DEBUG("DataEngine", "Resubscribed order book for " + instrument_id + 
                                  " depth " + std::to_string(old_depth) + " -> " + 
                                  std::to_string(active_depth));
                     }
@@ -276,7 +284,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             // Warn about client mismatch
             const auto& pinned = book_client_[instrument_id];
             if (!sub->client_id().empty() && sub->client_id() != pinned) {
-                log_warning("SubscribeOrderBook: " + instrument_id + 
+                LOG_WARN("DataEngine", "SubscribeOrderBook: " + instrument_id + 
                            " already subscribed via " + pinned + 
                            ", ignoring requested client " + sub->client_id());
             }
@@ -288,7 +296,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         const auto& instrument_id = unsub->instrument_id();
         auto it = book_refcount_.find(instrument_id);
         if (it == book_refcount_.end() || it->second <= 0) {
-            log_warning("UnsubscribeOrderBook: No active subscription for " + instrument_id);
+            LOG_WARN("DataEngine", "UnsubscribeOrderBook: No active subscription for " + instrument_id);
             return;
         }
         
@@ -302,7 +310,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             if (client_it != book_client_.end()) {
                 if (auto* client = get_client(client_it->second)) {
                     client->unsubscribe_order_book(instrument_id);
-                    log_debug("Unsubscribed order book for " + instrument_id);
+                    LOG_DEBUG("DataEngine", "Unsubscribed order book for " + instrument_id);
                 }
                 book_client_.erase(client_it);
             }
@@ -322,7 +330,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         ClientId chosen = select_client(bar_type.instrument_id(), sub->client_id());
         
         if (chosen.empty()) {
-            log_warning("SubscribeBars: No client available for " + key);
+            LOG_WARN("DataEngine", "SubscribeBars: No client available for " + key);
             return;
         }
         
@@ -333,12 +341,12 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             bar_client_[key] = chosen;
             if (auto* client = get_client(chosen)) {
                 client->subscribe_bars(bar_type);
-                log_debug("Subscribed bars for " + key + " via " + chosen);
+                LOG_DEBUG("DataEngine", "Subscribed bars for " + key + " via " + chosen);
             }
         } else {
             const auto& pinned = bar_client_[key];
             if (!sub->client_id().empty() && sub->client_id() != pinned) {
-                log_warning("SubscribeBars: " + key + 
+                LOG_WARN("DataEngine", "SubscribeBars: " + key + 
                            " already subscribed via " + pinned + 
                            ", ignoring requested client " + sub->client_id());
             }
@@ -351,7 +359,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         std::string key = bar_key(bar_type);
         auto it = bar_refcount_.find(key);
         if (it == bar_refcount_.end() || it->second <= 0) {
-            log_warning("UnsubscribeBars: No active subscription for " + key);
+            LOG_WARN("DataEngine", "UnsubscribeBars: No active subscription for " + key);
             return;
         }
         
@@ -361,7 +369,7 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
             if (client_it != bar_client_.end()) {
                 if (auto* client = get_client(client_it->second)) {
                     client->unsubscribe_bars(bar_type);
-                    log_debug("Unsubscribed bars for " + key);
+                    LOG_DEBUG("DataEngine", "Unsubscribed bars for " + key);
                 }
                 bar_client_.erase(client_it);
             }
@@ -370,11 +378,11 @@ void DataEngine::handle_execute(const std::shared_ptr<Message>& msg) {
         return;
     }
     
-    log_warning("handle_execute: Unknown command type: " + msg->type());
+    LOG_WARN("DataEngine", "handle_execute: Unknown command type: " + msg->type());
 }
 
 void DataEngine::handle_process(const std::shared_ptr<Message>& msg) {
-    log_debug("Received data: " + msg->type());
+    LOG_DEBUG("DataEngine", "Received data: " + msg->type());
     
     // ========================================================================
     // Quote tick: cache first, then publish
